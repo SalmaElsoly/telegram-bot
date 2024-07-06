@@ -36,6 +36,7 @@ func Start(bot *gotgbot.Bot, ctx *ext.Context) error {
 
 func SetReminder(bot *gotgbot.Bot, ctx *ext.Context) error {
 	var t time.Time
+
 	str := ctx.EffectiveMessage.Text
 	chatId := ctx.EffectiveChat.Id
 	slog.Info("Requesting to Set a Reminder In Chat: "+ strconv.FormatInt(chatId,10))
@@ -50,19 +51,23 @@ func SetReminder(bot *gotgbot.Bot, ctx *ext.Context) error {
 				keyValue[1] = strings.ToUpper(keyValue[1])
 				t, _ = time.Parse("3:04PM", keyValue[1])
 				t.Format("15:04")
-				continue
 			}
 			reminder[keyValue[0]] = keyValue[1]
 		}
 	}
 	reminder["when"] = strings.ToLower(reminder["when"])
 	slog.Info("Data parsed successfully")
-
+	var hour int
+	if t.Hour() < 3{
+		hour=12-3+t.Hour()
+	}else{
+		hour=t.Hour()-3
+	}
 	if reminder["when"] == "weekdays" {
 		_, err := Scheduler.NewJob(gocron.WeeklyJob(1,
 			gocron.NewWeekdays(time.Sunday, time.Monday, time.Tuesday, time.Wednesday, time.Thursday),
 			gocron.NewAtTimes(
-				gocron.NewAtTime(uint(t.Hour()), uint(t.Minute()), uint(t.Second()))),
+				gocron.NewAtTime(uint(hour), uint(t.Minute()), uint(t.Second()))),
 		), gocron.NewTask(func() {
 			notify(bot, reminder["message"], chatId)
 		}))
@@ -75,9 +80,9 @@ func SetReminder(bot *gotgbot.Bot, ctx *ext.Context) error {
 			return err
 
 		}
-		slog.Info(" Reminder was set successfully")
+		slog.Info("Reminder was set successfully for weekdays on "+ reminder["time"]+ " to chat "+ strconv.FormatInt(chatId,10))
 	} else if reminder["when"] == "everyday" {
-		_, err := Scheduler.NewJob(gocron.DailyJob(1, gocron.NewAtTimes(gocron.NewAtTime(uint(t.Hour()), uint(t.Minute()), uint(t.Second())))), gocron.NewTask(
+		_, err := Scheduler.NewJob(gocron.DailyJob(1, gocron.NewAtTimes(gocron.NewAtTime(uint(hour), uint(t.Minute()), uint(t.Second())))), gocron.NewTask(
 			func() {
 				notify(bot, reminder["message"], chatId)
 			},
@@ -90,12 +95,13 @@ func SetReminder(bot *gotgbot.Bot, ctx *ext.Context) error {
 			}
 			return err
 		}
-		slog.Info("Reminder was set successfully for everday on "+ reminder["time"]+ "to chat "+ strconv.FormatInt(chatId,10))
+		slog.Info("Reminder was set successfully for everday on "+ reminder["time"]+ " to chat "+ strconv.FormatInt(chatId,10))
 	}
 	_, err := ctx.EffectiveMessage.Reply(bot, "Reminder was set successfully", &gotgbot.SendMessageOpts{})
 	if err != nil {
 		slog.Error(err.Error())
 		return err
 	}
+
 	return nil
 }
